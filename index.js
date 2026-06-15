@@ -99,7 +99,12 @@ app.get('/album-pixels', async (req, res) => {
     const token = await getSpotifyToken();
     const searchRes = await axios.get('https://api.spotify.com/v1/search', {
       headers: { 'Authorization': 'Bearer ' + token },
-      params: { q: name, type: 'album', limit: Math.min(parseInt(limit), 50) }
+      params: { 
+        q: name, 
+        type: 'album', 
+        limit: Math.min(parseInt(limit), 50),
+        market: 'US'  // applies regional content rules
+      }
     });
 
     const albums = searchRes.data.albums.items;
