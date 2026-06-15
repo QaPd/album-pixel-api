@@ -76,40 +76,51 @@ app.get('/pixels', async (req, res) => {
   }
 });
 
-// --- Combined: search album then get pixels in one call ---
+// Replace the /album-pixels endpoint with this multi-result version
 app.get('/album-pixels', async (req, res) => {
   try {
-    const { name, size = 32 } = req.query;
+    const { name, size = 32, limit = 10 } = req.query;
     if (!name) return res.status(400).json({ error: 'Missing name parameter' });
 
     const token = await getSpotifyToken();
     const searchRes = await axios.get('https://api.spotify.com/v1/search', {
       headers: { 'Authorization': 'Bearer ' + token },
-      params: { q: name, type: 'album', limit: 1 }
+      params: { q: name, type: 'album', limit: Math.min(parseInt(limit), 50) }
     });
 
-    const album = searchRes.data.albums.items[0];
-    if (!album) return res.status(404).json({ error: 'Album not found' });
+    const albums = searchRes.data.albums.items;
+    if (!albums.length) return res.status(404).json({ error: 'No albums found' });
 
-    const imageUrl = album.images[0].url;
-    const imgRes = await axios({ url: imageUrl, responseType: 'arraybuffer' });
-    const { data, info } = await sharp(imgRes.data)
-      .resize(parseInt(size), parseInt(size))
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+    // Fetch pixel data for all albums in parallel
+    const results = await Promise.all(albums.map(async (album) => {
+      try {
+        const imageUrl = album.images[0]?.url;
+        if (!imageUrl) return null;
 
-    const pixels = [];
-    for (let i = 0; i < data.length; i += 3) {
-      pixels.push({ r: data[i], g: data[i+1], b: data[i+2] });
-    }
+        const imgRes = await axios({ url: imageUrl, responseType: 'arraybuffer' });
+        const { data, info } = await sharp(imgRes.data)
+          .resize(parseInt(size), parseInt(size))
+          .raw()
+          .toBuffer({ resolveWithObject: true });
 
-    res.json({
-      albumName: album.name,
-      artist: album.artists[0].name,
-      pixels,
-      width: info.width,
-      height: info.height
-    });
+        const pixels = [];
+        for (let i = 0; i < data.length; i += 3) {
+          pixels.push({ r: data[i], g: data[i+1], b: data[i+2] });
+        }
+
+        return {
+          albumName: album.name,
+          artist: album.artists[0].name,
+          pixels,
+          width: info.width,
+          height: info.height
+        };
+      } catch (e) {
+        return null; // skip any album that fails
+      }
+    }));
+
+    res.json(results.filter(Boolean)); // remove nulls
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
