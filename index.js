@@ -76,11 +76,25 @@ app.get('/pixels', async (req, res) => {
   }
 });
 
+const BLOCKED_TERMS = [
+  'porn', 'xxx', 'sex', 'nude', 'naked', 'hentai', 'nsfw',
+  // add more as needed
+];
+
+function containsBlockedTerm(query) {
+  const lower = query.toLowerCase();
+  return BLOCKED_TERMS.some(term => lower.includes(term));
+}
+
 // Replace the /album-pixels endpoint with this multi-result version
 app.get('/album-pixels', async (req, res) => {
   try {
     const { name, size = 32, limit = 10 } = req.query;
     if (!name) return res.status(400).json({ error: 'Missing name parameter' });
+
+      if (containsBlockedTerm(name)) {
+        return res.status(403).json({ error: 'Search term not allowed' });
+      }
 
     const token = await getSpotifyToken();
     const searchRes = await axios.get('https://api.spotify.com/v1/search', {
