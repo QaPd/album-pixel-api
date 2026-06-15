@@ -103,15 +103,17 @@ app.get('/album-pixels', async (req, res) => {
           .raw()
           .toBuffer({ resolveWithObject: true });
 
+        // Change the pixel building loop in index.js
         const pixels = [];
         for (let i = 0; i < data.length; i += 3) {
-          pixels.push({ r: data[i], g: data[i+1], b: data[i+2] });
+          // flat array [r,g,b,r,g,b,...] instead of [{r,g,b},...]
+          pixels.push(data[i], data[i+1], data[i+2]);
         }
-
+        
         return {
           albumName: album.name,
           artist: album.artists[0].name,
-          pixels,
+          pixels,  // now a flat array, 3x smaller JSON
           width: info.width,
           height: info.height
         };
